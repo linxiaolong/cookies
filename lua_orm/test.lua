@@ -83,12 +83,15 @@ print('[TC]: struct init')
 local obj_a = orm.create('class_a')
 tprint(obj_a)
 
--- print('[TC]: struct set attr')
+print('[TC]: struct set attr')
 obj_a.a = nil
 obj_a.b = 2
 obj_a.c = true
 obj_a.d = 'hello world'
 tprint(obj_a)
+for k, v in pairs(obj_a) do
+    print(k, v)
+end
 
 
 print('[TC]: struct init by data')
@@ -134,6 +137,9 @@ tprint(obj_c)
 print('[TC]: map')
 local obj_e = orm.create('class_e', {[1] = '2', ['2'] = '2'})
 tprint(obj_e)
+for k, v in pairs(obj_e) do
+    print(k, v)
+end
 
 print('[TC]: complex')
 local obj_f = orm.create('class_f')

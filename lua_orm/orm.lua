@@ -11,6 +11,10 @@ M.ATOM_DATA_TYPES = {
     string = {default = ''},
 }
 
+M.KEY_ATTRS = {
+    ['__class_id'] = true
+}
+
 M.class_id_enum = 0
 M.class_id_map = {}
 M.class_name_map = {}
@@ -345,7 +349,7 @@ function M.parse_map(data, class)
 
     local ret = {}
     for k_data, v_data in pairs(data) do
-        if not string.match(k_data, "^__.*") then
+        if not M.KEY_ATTRS[k_data] then
             local ok, k_value, keys = k_func(k_data, k_class)
             if not ok then
                 if keys == nil then keys = {} end
@@ -400,8 +404,8 @@ function M.load_node(data, class)
 end
 
 
-function M.setfield(obj, k, v)
-    -- print('setfield:', obj, obj.__class_id, k, v)
+M.struct_mt = {}
+function M.struct_setfield(obj, k, v)
     local class_id = obj.__class_id
     if not class_id then
         error(string.format("no class id<%s>", k))
@@ -413,69 +417,120 @@ function M.setfield(obj, k, v)
         error(string.format("no class info<%s|%s>", class_name, class_id))
     end
 
-    local data_type = class.type
-    if data_type == 'struct' then
-        -- check key exists
-        local v_class = class.attrs[k]
-        if not v_class then
-            local class_name = M.get_class_name_byid(class_id)
-            error(string.format('class<%s|%s> has no attr<%s>', class_name, class.id, k))
-        end
+    local v_class = class.attrs[k]
+    if not v_class then
+        local class_name = M.get_class_name_byid(class_id)
+        error(string.format('class<%s|%s> has no attr<%s>', class_name, class.id, k))
+    end
 
-        -- if v == nil, set node default
+    -- if v == nil, set node default
+    local ok, v_data = M.load_node(v, v_class)
+    if not ok then
+        error(string.format("key<%s>, err:<%s>", k, v_data))
+    end
+
+    rawset(obj, k, v_data)
+end
+
+function M.struct_mt.__newindex(obj, k, v)
+    -- print('struct __newindex', obj, k, v)
+    return M.struct_setfield(obj, k, v)
+end
+
+function M.struct_mt.__oldindex(obj, k, v)
+    -- print('struct __oldindex', obj, k, v)
+    return M.struct_setfield(obj, k, v)
+end
+
+
+function M.list_setfield(obj, k, v)
+    local class_id = obj.__class_id
+    if not class_id then
+        error(string.format("no class id<%s>", k))
+    end
+
+    local class = M.get_class_byid(class_id)
+    if not class then
+        local class_name = M.get_class_name_byid(class_id)
+        error(string.format("no class info<%s|%s>", class_name, class_id))
+    end
+
+    if v ~= nil then -- if v == nil, remove node
+        local v_class = class.item
         local ok, v_data = M.load_node(v, v_class)
         if not ok then
             error(string.format("key<%s>, err:<%s>", k, v_data))
         end
+        v = v_data
+    end
+    rawset(obj, k, v)
+end
 
-        rawset(obj, k, v_data)
-        return
+M.list_mt = {}
+function M.list_mt.__newindex(obj, k, v)
+    -- print('list __newindex', obj, k, v)
+    return M.list_setfield(obj, k, v)
+end
+
+function M.list_mt.__oldindex(obj, k, v)
+    -- print('list __oldindex', obj, k, v)
+    return M.list_setfield(obj, k, v)
+end
+
+function M.map_setfield(obj, k, v)
+    local class_id = obj.__class_id
+    if not class_id then
+        error(string.format("no class id<%s>", k))
     end
 
-    if data_type == 'list' then
-        if v ~= nil then -- if v == nil, remove node
-            local v_class = class.item
-            local ok, v_data = M.load_node(v, v_class)
-            if not ok then
-                error(string.format("key<%s>, err:<%s>", k, v_data))
-            end
-            v = v_data
-        end
-        rawset(obj, k, v)
-        return
+    local class = M.get_class_byid(class_id)
+    if not class then
+        local class_name = M.get_class_name_byid(class_id)
+        error(string.format("no class info<%s|%s>", class_name, class_id))
     end
 
-    if data_type == 'map' then
-        local ok, k_data = M.load_node(k, class.key)
+    local ok, k_data = M.load_node(k, class.key)
+    if not ok then
+        error(string.format("key<%s>, err:<%s>", k, k_data))
+    end
+
+    if v ~= nil then -- if v == nil, remove node
+        local ok, v_data = M.load_node(v, class.value)
         if not ok then
-            error(string.format("key<%s>, err:<%s>", k, k_data))
+            error(string.format("key<%s>, err:<%s>", k, v_data))
         end
+        v = v_data
+    end
+    rawset(obj, k_data, v)
+end
 
-        if v ~= nil then -- if v == nil, remove node
-            local ok, v_data = M.load_node(v, class.value)
-            if not ok then
-                error(string.format("key<%s>, err:<%s>", k, v_data))
-            end
-            v = v_data
+M.map_mt = {}
+function M.map_mt.__newindex(obj, k, v)
+    -- print('map __newindex', obj, k, v)
+    return M.map_setfield(obj, k, v)
+end
+
+function M.map_mt.__oldindex(obj, k, v)
+    -- print('map __oldindex', obj, k, v)
+    return M.map_setfield(obj, k, v)
+end
+
+function M.map_mt.__pairs(t)
+    local data = {}
+    for k, v in next, t do
+        if not M.KEY_ATTRS[k] then
+            data[k] = v
         end
-        rawset(obj, k_data, v)
-        return
     end
 
-    error(string.format("unsupport type<%s>", data_type))
+    return next, data, nil
 end
 
-M.mt = {}
-
-function M.mt.__newindex(obj, k, v)
-    -- print('__newindex', obj, k, v)
-    return M.setfield(obj, k, v)
-end
-
-function M.mt.__oldindex(obj, k, v)
-    -- print('__oldindex', obj, k, v)
-    return M.setfield(obj, k, v)
-end
+M.mt_types = {
+    struct = M.struct_mt,
+    list = M.list_mt,
+    map = M.map_mt,
+}
 
 function M.create_byid(class_id, data)
     local class = M.get_class_byid(class_id)
@@ -490,11 +545,11 @@ function M.create_byid(class_id, data)
     local obj = {
         __class_id = class_id
     }
-    setmetatable(obj, M.mt)
 
     -- check data type
     local data_type = class.type
     if data_type == 'struct' then
+        setmetatable(obj, M.struct_mt)
         for k, v in pairs(class.attrs) do
             -- print('init struct item', obj, k, data[k])
             obj[k] = data[k]
@@ -503,6 +558,7 @@ function M.create_byid(class_id, data)
     end
 
     if data_type == 'list' then
+        setmetatable(obj, M.list_mt)
         for idx, item in ipairs(data) do
             -- print('init list item', obj, idx, item)
             obj[idx] = item
@@ -511,9 +567,10 @@ function M.create_byid(class_id, data)
     end
 
     if data_type == 'map' then
+        setmetatable(obj, M.map_mt)
         for k, v in pairs(data) do
             -- print('init map item', obj, k, v)
-            if not string.match(k, "^__.*") then
+           if not M.KEY_ATTRS[k] then
                 obj[k] = v
             end
         end
