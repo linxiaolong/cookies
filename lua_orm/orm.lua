@@ -515,15 +515,22 @@ function M.map_mt.__oldindex(obj, k, v)
     return M.map_setfield(obj, k, v)
 end
 
-function M.map_mt.__pairs(t)
-    local data = {}
-    for k, v in next, t do
-        if not M.KEY_ATTRS[k] then
-            data[k] = v
-        end
+local function obj_next(obj, key)
+    local next_key = next(obj, key)
+    if not next_key then -- end
+        return 
     end
 
-    return next, data, nil
+    if M.KEY_ATTRS[next_key] then -- next key
+        -- print('is key attr', next_key)
+        return obj_next(obj, next_key) 
+    end
+
+    return next_key, obj[next_key] -- ok
+end
+
+function M.map_mt.__pairs(t)
+    return obj_next, t, nil
 end
 
 M.mt_types = {
