@@ -2,78 +2,71 @@ local orm = require 'orm'
 tprint = require('extend').Table.print
 
 -- test
-local class_a = {
-    ['name'] = 'class_a',
-    ['type'] = 'struct',
-    ['attrs'] = {
-        ['a'] = {type = "int", default = 10},
-        ['b'] = {type = "int"},
-        ['c'] = {type = "bool"},
-        ['d'] = {type = "string"},
-    }
-}
+local type_list = {
+    {
+        ['name'] = 'class_a',
+        ['type'] = 'struct',
+        ['attrs'] = {
+            ['a'] = {type = "number", default = 10},
+            ['b'] = {type = "number"},
+            ['c'] = {type = "boolean"},
+            ['d'] = {type = "string"},
+        }
+    },
 
 
-local class_b = {
-    ['name'] = 'class_b',
-    ['type'] = 'list',
-    ['item'] = {type = "int"}
-}
+    {
+        ['name'] = 'class_b',
+        ['type'] = 'list',
+        ['item'] = {type = "number"}
+    },
 
 
-local class_c = {
-    ['name'] = 'class_c',
-    ['type'] = 'struct',
-    ['attrs'] = {
-        ['ref_a'] = {type = "$class_a"},
-        ['ref_b'] = {type = "$class_b"},
-    }
-}
+    {
+        ['name'] = 'class_c',
+        ['type'] = 'struct',
+        ['attrs'] = {
+            ['ref_a'] = {type = "class_a"},
+            ['ref_b'] = {type = "class_b"},
+        }
+    },
 
-local class_d = {['name'] = 'class_d', type = "int", max=100}
+    {
+        ['name'] = 'class_e', 
+        ['type'] = 'map',
+        ['key'] = {type = "number", min=1},
+        ['value'] = {type = "string"},
+    },
 
-local class_e = {
-    ['name'] = 'class_e', 
-    ['type'] = 'map',
-    ['key'] = {type = "int", min=1},
-    ['value'] = {type = "string"},
-}
-
-local class_f = {
-    ['name'] = 'class_f', 
-    ['type'] = 'struct',
-    ['attrs'] = {
-        ['a'] = {
-            ['type'] = "struct",
-            ['attrs'] = {
-                ['b'] = {
-                    ['type'] = "list",
-                    ['item'] = {
-                        ["type"] = "$class_d",
+    {
+        ['name'] = 'class_f', 
+        ['type'] = 'struct',
+        ['attrs'] = {
+            ['a'] = {
+                ['type'] = "struct",
+                ['attrs'] = {
+                    ['b'] = {
+                        ['type'] = "list",
+                        ['item'] = {
+                            ["type"] = "number",
+                        }
                     }
                 }
-            }
-        },
-        ['b'] = {
-            ['type'] = "list",
-            ['item'] = {
-                ["type"] = "$class_e",
+            },
+            ['b'] = {
+                ['type'] = "list",
+                ['item'] = {
+                    ["type"] = "class_e",
+                }
             }
         }
-    }
+    },
 }
 
+
 print('[TC]: type init')
-orm.init(
-    {
-        class_a,
-        class_b,
-        class_c,
-        class_d,
-        class_e,
-        class_f,
-    }
-)
+orm.init(type_list)
+
 print('--- obj_class_id_map')
 tprint(orm.class_id_map)
 print('--- obj_class_name_map')
@@ -157,7 +150,7 @@ tprint(obj_f)
 --         ['b'] = {
 --             ['type'] = "list",
 --             ['item'] = {
---                 ["type"] = "$class_f",
+--                 ["type"] = "class_f",
 --             }
 --         }
 --     }
@@ -168,7 +161,7 @@ tprint(obj_f)
 --     ['type'] = 'struct',
 --     ['item'] = {
 --         ['a'] = {type = "string", required = false, default="default_s"},
---         ['b'] = {type = "$class_h"},
+--         ['b'] = {type = "class_h"},
 --     }
 -- }
 
@@ -177,7 +170,7 @@ tprint(obj_f)
 --     ['type'] = 'struct',
 --     ['item'] = {
 --         ['a'] = {type = "string", required = false, default="default_s"},
---         ['b'] = {type = "$class_g"},
+--         ['b'] = {type = "class_g"},
 --     }
 -- }
 -- orm.init(

@@ -1,4 +1,13 @@
 local M = {}
+M.KEYWORD_MAP = {
+    boolean = true,
+    number = true,
+    string = true,
+    struct = true,
+    list = true,
+    map = true,
+}
+
 M.CONTAINER_DATA_TYPES = {
     struct = true,
     list = true,
@@ -6,8 +15,8 @@ M.CONTAINER_DATA_TYPES = {
 }
 
 M.ATOM_DATA_TYPES = {
-    int = {default = 1},
-    bool = {default = false},
+    number = {default = 0},
+    boolean = {default = false},
     string = {default = ''},
 }
 
@@ -75,14 +84,17 @@ end
 
 function M.load_class_define(class, parent_id)
     assert(class, "no class define")
-    -- print('init obj type', class, class.name, class.type)
+    -- print('init obj type', class.name, class.type)
+
+    if M.KEYWORD_MAP[class.name] then
+        error(string.format("type_name<%s> is keyword", class.name))
+    end
 
     local data_type = class.type
-    local ref_class_name = string.match(data_type, "^$(.*)")
-    if ref_class_name then
-        local ref_type_id = M.get_class_byname(ref_class_name)
+    if not M.KEYWORD_MAP[data_type] then
+        local ref_type_id = M.get_class_byname(data_type)
         if not ref_type_id then
-            error(string.format("init class, ref illegal class<%s>", ref_class_name))
+            error(string.format("init class<%s|%s>, ref illegal ", class.name, data_type))
         end
         M.check_ref(ref_type_id, parent_id)
         class.id = ref_type_id
@@ -237,7 +249,7 @@ function M.parse_string(s, class)
 end
 
 
-function M.parse_bool(s, class)
+function M.parse_boolean(s, class)
     if s == nil then
         return M.get_default(class)
     end
@@ -246,32 +258,14 @@ function M.parse_bool(s, class)
 end
 
 
-function M.parse_int(s, class)
-    if s == nil then
-        return M.get_default(class)
-    end
-
-    local value_a = tonumber(s)
-    if value_a == nil then
-        return false, string.format("<%s> not int", s)
-    end
-
-    local value_b = math.floor(value_a)
-    if value_a ~= value_b then
-        return false, string.format("<%s> not int", s)
-    end
-    return check_value(value_b, class)
-end
-
-
-function M.parse_float(s, class)
+function M.parse_number(s, class)
     if s == nil then
         return M.get_default(class)
     end
 
     local value = tonumber(s)
     if value == nil then
-        return false, "not number"
+        return false, string.format("<%s> not int", s)
     end
 
     return check_value(value, class)
