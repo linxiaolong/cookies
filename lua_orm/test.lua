@@ -67,10 +67,8 @@ local type_list = {
 print('[TC]: type init')
 orm.init(type_list)
 
-print('--- obj_class_id_map')
-tprint(orm.class_id_map)
-print('--- obj_class_name_map')
-tprint(orm.class_name_map)
+print('--- obj_class_map')
+tprint(orm.class_map)
 
 print('[TC]: struct init')
 local obj_a = orm.create('class_a')

@@ -21,33 +21,14 @@ M.ATOM_DATA_TYPES = {
 }
 
 M.KEY_ATTRS = {
-    ['__class_id'] = true
+    ['__class'] = true
 }
 
-M.class_id_enum = 0
-M.class_id_map = {}
-M.class_name_map = {}
-M.class_ref_map = {} -- class_id : [parent_id, ...]
+M.class_map = {}
+M.class_ref_map = {} -- class_name : [parent_name, ...]
 
-function M.new_class_id()
-    M.class_id_enum = M.class_id_enum + 1
-    return M.class_id_enum
-end
-
-function M.get_class_byid(id)
-    return M.class_id_map[id]
-end
-
-function M.get_class_byname(name)
-    return M.class_name_map[name]
-end
-
-function M.get_class_name_byid(type_id)
-    local class = M.get_class_byid(type_id)
-    if not class then
-        return nil
-    end
-    return class.name
+function M.get_class(name)
+    return M.class_map[name]
 end
 
 function M.check_ref(node_id, parent_id)
@@ -57,8 +38,7 @@ function M.check_ref(node_id, parent_id)
     end
 
     if parent_id == node_id then
-        local name = M.get_class_name_byid(node_id)
-        error(string.format('type<%s|%s> ref recursion define', name, node_id))
+        error(string.format('type<%s> ref recursion define', node_id))
     end
 
     local p_map = M.class_ref_map[node_id]
@@ -82,44 +62,41 @@ function M.check_ref(node_id, parent_id)
 end
 
 
-function M.load_class_define(class, parent_id)
+function M.load_class_define(class, parent_name)
     assert(class, "no class define")
     -- print('init obj type', class.name, class.type)
 
-    if M.KEYWORD_MAP[class.name] then
-        error(string.format("type_name<%s> is keyword", class.name))
+    if parent_name ~= nil then
+        class.name = parent_name .. "." .. class.name
+    end
+    local class_name = class.name
+
+    if M.KEYWORD_MAP[class_name] then
+        error(string.format("class name<%s> is keyword", class_name))
     end
 
     local data_type = class.type
-    if not M.KEYWORD_MAP[data_type] then
-        local ref_type_id = M.get_class_byname(data_type)
-        if not ref_type_id then
+    if not M.KEYWORD_MAP[data_type] then -- ref type
+        local ref_class_name = data_type
+        local ref_class = M.get_class(ref_class_name)
+        if ref_class == nil then
             error(string.format("init class<%s|%s>, ref illegal ", class.name, data_type))
         end
-        M.check_ref(ref_type_id, parent_id)
-        class.id = ref_type_id
+
+        M.check_ref(ref_class.name, parent_name)
+        data_type = ref_class.type
+        class.name = ref_class.name
+        local class_name = class.name
         return
     end
 
     if not data_type then
-        error(string.format("init class<%s|%s> no data type", class.name, class.id))
+        error(string.format("init class<%s> no data type", class_name))
     end
 
-    local type_id = M.new_class_id()
-    class.id = type_id
-    M.check_ref(type_id, parent_id)
-    M.class_id_map[type_id] = class
-        
-    -- name -> id map
-    local class_name = class.name
-    if class_name then
-        if M.class_name_map[class_name] ~= nil then
-            error(string.format("repeated obj define, name<%s>", class_name))
-        end
-
-        M.class_name_map[class_name] = type_id
-    end
-
+    M.check_ref(class_name, parent_name)
+    M.class_map[class_name] = class
+    
     if not M.CONTAINER_DATA_TYPES[data_type] then
         return
     end
@@ -128,19 +105,23 @@ function M.load_class_define(class, parent_id)
     if data_type == 'struct' then
         assert(class.attrs, "not attrs")
         for k, v in pairs(class.attrs) do
-            M.load_class_define(v, type_id)
+            v.name = k
+            M.load_class_define(v, class_name)
         end
         return
     end
 
     if data_type == 'list' then
-        M.load_class_define(class.item, type_id)
+        class.item.name = 'item'
+        M.load_class_define(class.item, class_name)
         return
     end
 
     if data_type == 'map' then
-        M.load_class_define(class.key, type_id)
-        M.load_class_define(class.value, type_id)
+        class.key.name = 'key'
+        M.load_class_define(class.key, class_name)
+        class.value.name = 'value'
+        M.load_class_define(class.value, class_name)
         return
     end
 
@@ -150,9 +131,7 @@ end
 
 function M.init(type_list)
     -- reset
-    M.class_id_enum = 0
-    M.class_id_map = {}
-    M.class_name_map = {}
+    M.class_map = {}
     M.class_ref_map = {}
 
     for _, item in ipairs(type_list) do
@@ -222,7 +201,7 @@ function M.get_default(class)
     end
 
     if M.CONTAINER_DATA_TYPES[data_type] then -- no custom default
-        return true, M.create_byid(class.id)
+        return true, M.create_byid(class.name)
     end
 
     local atom_cfg = M.ATOM_DATA_TYPES[data_type]
@@ -296,8 +275,8 @@ function M.parse_struct(data, class)
         ret[attr_key] = attr_value
     end
 
-    -- print('parse struct create obj', class.id, ret)
-    return true, M.create_byid(class.id, ret)
+    -- print('parse struct create obj', class.name, ret)
+    return true, M.create_byid(class.name, ret)
 end
 
 
@@ -322,7 +301,7 @@ function M.parse_list(data, class)
         table.insert(ret, item_value)
     end
 
-    return true, M.create_byid(class.id, ret)
+    return true, M.create_byid(class.name, ret)
 end
 
 
@@ -361,26 +340,24 @@ function M.parse_map(data, class)
             ret[k_value] = v_value
         end
     end
-
-    return true, M.create_byid(class.id, ret)
+    return true, M.create_byid(class.name, ret)
 end
 
 
 function M.get_parser(class)
-    -- print('get parser by class', class, class.type, class.id)
-    if class.id then
-        local new_class = M.get_class_byid(class.id)
-        if not new_class then
-            return nil, class
-        end
-        class = new_class
-    --     print('parse struct class', class.id, class.type)
-    -- else
-    --     print('parse atom class', class.type)
-    end
+    -- print('get parser by class', class, class.type, class.name)
 
     local func = M[string.format('parse_%s', class.type)]
-    return func, class
+    if func then
+        return func, class
+    end
+
+    local ref_class = M.get_class(class.name)
+    if not ref_class then
+        return nil, ref_class
+    end
+    local func = M[string.format('parse_%s', ref_class.type)]
+    return func, ref_class
 end
 
 
@@ -398,23 +375,35 @@ function M.load_node(data, class)
 end
 
 
-M.struct_mt = {}
-function M.struct_setfield(obj, k, v)
-    local class_id = obj.__class_id
-    if not class_id then
-        error(string.format("no class id<%s>", k))
+local function obj_next(obj, key)
+    local next_key = next(obj, key)
+    if not next_key then -- end
+        return 
     end
 
-    local class = M.get_class_byid(class_id)
+    if M.KEY_ATTRS[next_key] then -- next key
+        -- print('is key attr', next_key)
+        return obj_next(obj, next_key) 
+    end
+
+    return next_key, obj[next_key] -- ok
+end
+
+M.struct_mt = {}
+function M.struct_setfield(obj, k, v)
+    local class_name = obj.__class
+    if not class_name then
+        error(string.format("no class<%s>", k))
+    end
+
+    local class = M.get_class(class_name)
     if not class then
-        local class_name = M.get_class_name_byid(class_id)
-        error(string.format("no class info<%s|%s>", class_name, class_id))
+        error(string.format("no class info<%s>", class_name))
     end
 
     local v_class = class.attrs[k]
     if not v_class then
-        local class_name = M.get_class_name_byid(class_id)
-        error(string.format('class<%s|%s> has no attr<%s>', class_name, class.id, k))
+        error(string.format('class<%s> has no attr<%s>', class_name, k))
     end
 
     -- if v == nil, set node default
@@ -437,16 +426,16 @@ function M.struct_mt.__oldindex(obj, k, v)
 end
 
 
+M.list_mt = {}
 function M.list_setfield(obj, k, v)
-    local class_id = obj.__class_id
-    if not class_id then
-        error(string.format("no class id<%s>", k))
+    local class_name = obj.__class
+    if not class_name then
+        error(string.format("no class<%s>", k))
     end
 
-    local class = M.get_class_byid(class_id)
+    local class = M.get_class(class_name)
     if not class then
-        local class_name = M.get_class_name_byid(class_id)
-        error(string.format("no class info<%s|%s>", class_name, class_id))
+        error(string.format("no class info<%s>", class_name))
     end
 
     if v ~= nil then -- if v == nil, remove node
@@ -460,7 +449,6 @@ function M.list_setfield(obj, k, v)
     rawset(obj, k, v)
 end
 
-M.list_mt = {}
 function M.list_mt.__newindex(obj, k, v)
     -- print('list __newindex', obj, k, v)
     return M.list_setfield(obj, k, v)
@@ -471,16 +459,17 @@ function M.list_mt.__oldindex(obj, k, v)
     return M.list_setfield(obj, k, v)
 end
 
+
+M.map_mt = {}
 function M.map_setfield(obj, k, v)
-    local class_id = obj.__class_id
-    if not class_id then
-        error(string.format("no class id<%s>", k))
+    local class_name = obj.__class
+    if not class_name then
+        error(string.format("no class<%s>", k))
     end
 
-    local class = M.get_class_byid(class_id)
+    local class = M.get_class(class_name)
     if not class then
-        local class_name = M.get_class_name_byid(class_id)
-        error(string.format("no class info<%s|%s>", class_name, class_id))
+        error(string.format("no class info<%s>", class_name))
     end
 
     local ok, k_data = M.load_node(k, class.key)
@@ -498,7 +487,6 @@ function M.map_setfield(obj, k, v)
     rawset(obj, k_data, v)
 end
 
-M.map_mt = {}
 function M.map_mt.__newindex(obj, k, v)
     -- print('map __newindex', obj, k, v)
     return M.map_setfield(obj, k, v)
@@ -507,20 +495,6 @@ end
 function M.map_mt.__oldindex(obj, k, v)
     -- print('map __oldindex', obj, k, v)
     return M.map_setfield(obj, k, v)
-end
-
-local function obj_next(obj, key)
-    local next_key = next(obj, key)
-    if not next_key then -- end
-        return 
-    end
-
-    if M.KEY_ATTRS[next_key] then -- next key
-        -- print('is key attr', next_key)
-        return obj_next(obj, next_key) 
-    end
-
-    return next_key, obj[next_key] -- ok
 end
 
 function M.map_mt.__pairs(t)
@@ -533,10 +507,10 @@ M.mt_types = {
     map = M.map_mt,
 }
 
-function M.create_byid(class_id, data)
-    local class = M.get_class_byid(class_id)
+function M.create_byid(class_name, data)
+    local class = M.get_class(class_name)
     if not class then
-        error(string.format("create obj byid, illgeal class_id<%s>", class_id))
+        error(string.format("create obj, illgeal class<%s>", class_name))
     end
 
     if data == nil then
@@ -544,7 +518,7 @@ function M.create_byid(class_id, data)
     end
 
     local obj = {
-        __class_id = class_id
+        __class = class_name
     }
 
     -- check data type
@@ -578,17 +552,12 @@ function M.create_byid(class_id, data)
         return obj
     end
 
-    local name = M.get_class_name_byid(class_id)
-    error(string.format("unsupport obj class<%s|%s>", name, class_id))
+    error(string.format("unsupport obj class<%s>", class_name))
 end
 
 
 function M.create(class_name, data)
-    local class_id = M.get_class_byname(class_name)
-    if not class_id then
-        error(string.format("create obj, illgeal class name<%s>", class_name))
-    end
-    return M.create_byid(class_id, data)
+    return M.create_byid(class_name, data)
 end
 
 
