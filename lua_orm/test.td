@@ -20,7 +20,8 @@ class_f {
         b [number]
     }
     b [class_e]
-    c {
+    c <string, class_e>
+    d {
         a number
         b string
         c {

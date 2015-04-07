@@ -197,11 +197,11 @@ function M.get_default(class)
 
     local data_type = class.type
     if not data_type then
-        return false, 'not data type'
+        return false, "no data type"
     end
 
     if M.CONTAINER_DATA_TYPES[data_type] then -- no custom default
-        return true, M.create_byid(class.name)
+        return true, M.create(class.name)
     end
 
     local atom_cfg = M.ATOM_DATA_TYPES[data_type]
@@ -244,7 +244,7 @@ function M.parse_number(s, class)
 
     local value = tonumber(s)
     if value == nil then
-        return false, string.format("<%s> not int", s)
+        return false, string.format("<%s> not number", s)
     end
 
     return check_value(value, class)
@@ -276,7 +276,7 @@ function M.parse_struct(data, class)
     end
 
     -- print('parse struct create obj', class.name, ret)
-    return true, M.create_byid(class.name, ret)
+    return true, M.create(class.name, ret)
 end
 
 
@@ -301,7 +301,7 @@ function M.parse_list(data, class)
         table.insert(ret, item_value)
     end
 
-    return true, M.create_byid(class.name, ret)
+    return true, M.create(class.name, ret)
 end
 
 
@@ -340,7 +340,7 @@ function M.parse_map(data, class)
             ret[k_value] = v_value
         end
     end
-    return true, M.create_byid(class.name, ret)
+    return true, M.create(class.name, ret)
 end
 
 
@@ -406,10 +406,20 @@ function M.struct_setfield(obj, k, v)
         error(string.format('class<%s> has no attr<%s>', class_name, k))
     end
 
+    -- optimize, trust class obj by name
+    if type(v) == 'table' and M.class_map[v_class.name] and v_class.name == v.__class then
+        -- print(
+        --     '-- struct trust class obj', 
+        --     class.name, k, v_class.name, v.__class
+        -- )
+        rawset(obj, k, v)
+        return
+    end
+
     -- if v == nil, set node default
     local ok, v_data = M.load_node(v, v_class)
     if not ok then
-        error(string.format("key<%s>, err:<%s>", k, v_data))
+        error(string.format("class<%s> key<%s>, err:<%s>", class_name, k, v_data))
     end
 
     rawset(obj, k, v_data)
@@ -438,15 +448,26 @@ function M.list_setfield(obj, k, v)
         error(string.format("no class info<%s>", class_name))
     end
 
-    if v ~= nil then -- if v == nil, remove node
-        local v_class = class.item
-        local ok, v_data = M.load_node(v, v_class)
-        if not ok then
-            error(string.format("key<%s>, err:<%s>", k, v_data))
-        end
-        v = v_data
+    if v == nil then -- if v == nil, remove node
+        rawset(obj, k, nil)
+        return
     end
-    rawset(obj, k, v)
+
+    local v_class = class.item
+    -- optimize, trust class obj by name
+    if type(v) == 'table' and M.class_map[v_class.name] and v_class.name == v.__class then
+        -- print(
+        --     '-- list trust class obj', 
+        --     class.name, k, v_class.name, v.__class
+        -- )
+        rawset(obj, k, v)
+    end
+
+    local ok, v_data = M.load_node(v, v_class)
+    if not ok then
+        error(string.format("class<%s> key<%s>, err:<%s>", class_name, k, v_data))
+    end
+    rawset(obj, k, v_data)
 end
 
 function M.list_mt.__newindex(obj, k, v)
@@ -474,17 +495,29 @@ function M.map_setfield(obj, k, v)
 
     local ok, k_data = M.load_node(k, class.key)
     if not ok then
-        error(string.format("key<%s>, err:<%s>", k, k_data))
+        error(string.format("class<%s> key<%s>, err:<%s>", class_name, k, k_data))
     end
 
-    if v ~= nil then -- if v == nil, remove node
-        local ok, v_data = M.load_node(v, class.value)
-        if not ok then
-            error(string.format("key<%s>, err:<%s>", k, v_data))
-        end
-        v = v_data
+    if v == nil then -- if v == nil, remove node
+        rawset(obj, k_data, nil)
+        return
     end
-    rawset(obj, k_data, v)
+
+    local v_class = class.value
+    -- optimize, trust class obj by name
+    if type(v) == 'table' and M.class_map[v_class.name] and v_class.name == v.__class then
+        -- print(
+        --     '-- map trust class obj', 
+        --     class.name, k, v_class.name, v.__class
+        -- )
+        rawset(obj, k_data, v)
+    end
+
+    local ok, v_data = M.load_node(v, class.value)
+    if not ok then
+        error(string.format("class<%s> key<%s>, err:<%s>", class_name, k, v_data))
+    end
+    rawset(obj, k_data, v_data)
 end
 
 function M.map_mt.__newindex(obj, k, v)
@@ -507,7 +540,7 @@ M.mt_types = {
     map = M.map_mt,
 }
 
-function M.create_byid(class_name, data)
+function M.create(class_name, data)
     local class = M.get_class(class_name)
     if not class then
         error(string.format("create obj, illgeal class<%s>", class_name))
@@ -554,11 +587,5 @@ function M.create_byid(class_name, data)
 
     error(string.format("unsupport obj class<%s>", class_name))
 end
-
-
-function M.create(class_name, data)
-    return M.create_byid(class_name, data)
-end
-
 
 return M
