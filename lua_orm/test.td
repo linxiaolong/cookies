@@ -1,3 +1,5 @@
+include test2.td
+
 class_a {
     a number
     b number

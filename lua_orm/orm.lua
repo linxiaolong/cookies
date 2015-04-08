@@ -407,13 +407,20 @@ function M.struct_setfield(obj, k, v)
     end
 
     -- optimize, trust class obj by name
-    if type(v) == 'table' and M.class_map[v_class.name] and v_class.name == v.__class then
-        -- print(
-        --     '-- struct trust class obj', 
-        --     class.name, k, v_class.name, v.__class
-        -- )
-        rawset(obj, k, v)
-        return
+    if type(v) == 'table' and v.__class ~= nil and M.class_map[v_class.name] then
+        if v_class.name == v.__class then
+            -- print(
+            --     '-- struct trust class obj', 
+            --     class.name, k, v_class.name, v.__class
+            -- )
+            rawset(obj, k, v)
+            return
+        end
+        local s = string.format(
+            'obj<%s.%s> value type not match, need<%s>, give<%s>',
+            class_name, k, v_class.name, v.__class
+        )
+        error(s)
     end
 
     -- if v == nil, set node default
@@ -455,12 +462,20 @@ function M.list_setfield(obj, k, v)
 
     local v_class = class.item
     -- optimize, trust class obj by name
-    if type(v) == 'table' and M.class_map[v_class.name] and v_class.name == v.__class then
-        -- print(
-        --     '-- list trust class obj', 
-        --     class.name, k, v_class.name, v.__class
-        -- )
-        rawset(obj, k, v)
+    if type(v) == 'table' and v.__class ~= nil and M.class_map[v_class.name] then
+        if v_class.name == v.__class then
+            -- print(
+            --     '-- list trust class obj', 
+            --     class.name, k, v_class.name, v.__class
+            -- )
+            rawset(obj, k, v)
+            return
+        end
+        local s = string.format(
+            'obj<%s.%s> value type not match, need<%s>, give<%s>',
+            class_name, k, v_class.name, v.__class
+        )
+        error(s)
     end
 
     local ok, v_data = M.load_node(v, v_class)
@@ -505,12 +520,21 @@ function M.map_setfield(obj, k, v)
 
     local v_class = class.value
     -- optimize, trust class obj by name
-    if type(v) == 'table' and M.class_map[v_class.name] and v_class.name == v.__class then
-        -- print(
-        --     '-- map trust class obj', 
-        --     class.name, k, v_class.name, v.__class
-        -- )
-        rawset(obj, k_data, v)
+    if type(v) == 'table' and v.__class ~= nil and M.class_map[v_class.name] then
+        if v_class.name == v.__class then
+            -- print(
+            --     '-- map trust class obj', 
+            --     class.name, k, v_class.name, v.__class
+            -- )
+            rawset(obj, k_data, v)
+            return
+        end
+
+        local s = string.format(
+            'obj<%s.%s> value type not match, need<%s>, give<%s>',
+            class_name, k_data, v_class.name, v.__class
+        )
+        error(s)
     end
 
     local ok, v_data = M.load_node(v, class.value)

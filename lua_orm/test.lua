@@ -148,12 +148,15 @@ print('[TC]: type ref optimize')
 local obj_a = orm.create('class_a')
 local obj_b = orm.create('class_b', {4, 2, 3})
 local obj_c = orm.create('class_c')
+obj_c.ref_a = {}
 obj_c.ref_a = obj_a
 obj_c.ref_b = obj_b
 tprint(obj_c)
 local obj_e = orm.create('class_e')
 local obj_f = orm.create('class_f')
+-- table.insert(obj_f.b, {__class='test'})
 table.insert(obj_f.b, obj_e)
+-- obj_f.c['a'] = {__class='test'}
 obj_f.c['a'] = obj_e
 tprint(obj_f)
 

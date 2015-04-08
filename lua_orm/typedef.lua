@@ -15,6 +15,7 @@ local alnum = locale.alnum
 local digit = locale.digit
 local space = locale.space
 
+local line_infos = {}
 local function count_lines(_,pos, parser_state)
     if parser_state.pos < pos then
         parser_state.line = parser_state.line + 1
@@ -27,10 +28,11 @@ end
 local exception = lpeg.Cmt(
     lpeg.Carg(1),
     function(text, pos, parser_state)
+        local line_info = line_infos[parser_state.line]
         local s = string.format(
             "syntax error, file[%s],line[%s],pos[%s]",
-            parser_state.file,
-            parser_state.line,
+            line_info.file,
+            line_info.line,
             pos
         )
         error(s)
@@ -112,14 +114,25 @@ local schema = blank0 * typedef * blank0
 local function preprocess(filename, dir)
    local text = {}
    local path = dir .. "/" .. filename
-   for l in io.lines(path) do
-      local include = string.match(l,"^%s*include%s+([^%s]+)%s*")
-      if include then
-         include = dir .. "/" .. include
-         l = assert(io.open(include,"r")):read("*all")
-      end
-      -- TODO: 加个行号索引到源文件名和行号的map, 方便报错调试用
-      text[#text+1] = l
+   line_infos = {}
+   local idx = 0
+   for line in io.lines(path) do
+       idx = idx + 1
+       local include = string.match(line, "^%s*include%s+([^%s]+)%s*")
+       if not include then
+           local _idx = #text + 1
+           text[_idx] = line
+           line_infos[_idx] = {line = idx, file=path}
+       else
+           local _idx = 0
+           include = dir .. "/" .. include
+           for _line in io.lines(include) do
+               _idx = _idx + 1
+               local idx = #text+1
+               text[idx] = _line
+               line_infos[idx] = {line = _idx, file=include}
+           end
+       end
    end
    return table.concat(text, "\n")
 end
